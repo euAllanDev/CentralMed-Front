@@ -1,0 +1,17 @@
+# ... (postgres, pgadmin, api já existem)
+
+frontend:
+  build: ./centralmed-front
+  container_name: centralmed-front
+  restart: always
+  ports:
+    - "3000:3000"
+  volumes:
+    - ./centralmed-front:/app
+    - /app/node_modules
+  environment:
+    - WATCHPACK_POLLING=true # Necessário para hot-reload no Windows/Docker
+  depends_on:
+    - api
+  networks:
+    - centralmed-net

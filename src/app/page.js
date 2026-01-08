@@ -1,65 +1,146 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useEffect, useState } from "react";
+import api from "@/services/api";
+import { Users, AlertTriangle, DollarSign, Activity } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+
+export default function Dashboard() {
+  const { user } = useAuth();
+  const [stats, setStats] = useState({
+    pacientes: 0,
+    estoqueBaixo: 0,
+    faturamentoDia: 0,
+    filaEspera: 0,
+  });
+
+  useEffect(() => {
+    carregarDados();
+  }, []);
+
+  async function carregarDados() {
+    try {
+      // Fazemos várias chamadas em paralelo para montar o dashboard
+      const [resPacientes, resEstoque, resFinanceiro, resFila] =
+        await Promise.all([
+          api.get("/recepcao/pacientes"),
+          api.get("/estoque"),
+          api.get("/financeiro"),
+          api.get("/recepcao/fila/triagem"), // Usando fila triagem como métrica de atividade
+        ]);
+
+      // Cálculos simples no front (idealmente seria no back)
+      const estoqueBaixoCount = resEstoque.data.filter(
+        (i) => i.qtdeAtual <= i.qtdeMinima
+      ).length;
+
+      // Soma faturamento (supondo que a dataLancamento seja hoje)
+      // Aqui simplifiquei pegando o total geral para demonstração
+      const totalFaturamento = resFinanceiro.data.reduce(
+        (acc, curr) => acc + curr.valor,
+        0
+      );
+
+      setStats({
+        pacientes: resPacientes.data.length,
+        estoqueBaixo: estoqueBaixoCount,
+        faturamentoDia: totalFaturamento,
+        filaEspera: resFila.data.length,
+      });
+    } catch (error) {
+      console.error("Erro ao carregar dashboard", error);
+    }
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.js file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-gray-800">
+          Olá, <span className="text-blue-600">{user?.nome}</span>
+        </h2>
+        <span className="text-sm text-gray-500">
+          {new Date().toLocaleDateString()}
+        </span>
+      </div>
+
+      {/* Cards de Estatísticas */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 flex items-center gap-4">
+          <div className="bg-blue-100 p-3 rounded-full text-blue-600">
+            <Users size={24} />
+          </div>
+          <div>
+            <p className="text-gray-500 text-sm">Total Pacientes</p>
+            <h3 className="text-2xl font-bold text-gray-800">
+              {stats.pacientes}
+            </h3>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 flex items-center gap-4">
+          <div className="bg-green-100 p-3 rounded-full text-green-600">
+            <DollarSign size={24} />
+          </div>
+          <div>
+            <p className="text-gray-500 text-sm">Faturamento</p>
+            <h3 className="text-2xl font-bold text-gray-800">
+              R${" "}
+              {stats.faturamentoDia.toLocaleString("pt-BR", {
+                minimumFractionDigits: 2,
+              })}
+            </h3>
+          </div>
         </div>
-      </main>
+
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 flex items-center gap-4">
+          <div className="bg-yellow-100 p-3 rounded-full text-yellow-600">
+            <Activity size={24} />
+          </div>
+          <div>
+            <p className="text-gray-500 text-sm">Fila Triagem</p>
+            <h3 className="text-2xl font-bold text-gray-800">
+              {stats.filaEspera}
+            </h3>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 flex items-center gap-4">
+          <div className="bg-red-100 p-3 rounded-full text-red-600">
+            <AlertTriangle size={24} />
+          </div>
+          <div>
+            <p className="text-gray-500 text-sm">Estoque Crítico</p>
+            <h3 className="text-2xl font-bold text-gray-800">
+              {stats.estoqueBaixo}
+            </h3>
+          </div>
+        </div>
+      </div>
+
+      {/* Área de Gráficos / Avisos (Placeholder) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 min-h-[300px]">
+          <h3 className="font-bold text-gray-700 mb-4">Avisos do Sistema</h3>
+          <div className="space-y-3">
+            {stats.estoqueBaixo > 0 && (
+              <div className="p-3 bg-red-50 text-red-700 rounded border border-red-100 flex items-center gap-2">
+                <AlertTriangle size={16} />
+                <span>
+                  Atenção: Existem {stats.estoqueBaixo} itens abaixo do estoque
+                  mínimo.
+                </span>
+              </div>
+            )}
+            <div className="p-3 bg-blue-50 text-blue-700 rounded border border-blue-100">
+              <span>Bem-vindo ao sistema CentralMed v1.0</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 min-h-[300px] flex items-center justify-center text-gray-400">
+          (Gráfico de Atendimentos da Semana)
+        </div>
+      </div>
     </div>
   );
 }
