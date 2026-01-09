@@ -29,6 +29,13 @@ export default function Sidebar() {
       roles: ["ADMIN"] 
     },
 
+    { 
+      name: "Gestão Usuários", 
+      href: "/admin/usuarios", 
+      icon: Users, 
+      roles: ["ADMIN"] 
+    },
+
     // 2. Painel da Recepção (O botão que faltava!)
     { 
       name: "Painel Inicial", 
