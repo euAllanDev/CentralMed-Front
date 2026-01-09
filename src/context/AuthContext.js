@@ -46,7 +46,20 @@ export function AuthProvider({ children }) {
         nome: decoded.sub,
       });
 
-      router.push("/"); // Vai para Dashboard
+      switch (decoded.perfil) {
+        case "RECEPCAO":
+          router.push("/recepcao");
+          break;
+        case "MEDICO":
+          router.push("/medico");
+          break;
+        case "ENFERMAGEM":
+          router.push("/triagem");
+          break;
+        default:
+          router.push("/"); // Admin vai para o Dashboard Geral
+      }
+      
     } catch (error) {
       console.error(error);
       throw new Error("Usuário ou senha inválidos");

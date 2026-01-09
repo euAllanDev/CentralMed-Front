@@ -3,10 +3,13 @@
 import { useEffect, useState } from "react";
 import api from "@/services/api";
 import { Users, AlertTriangle, DollarSign, Activity } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const router = useRouter();
+  
   const [stats, setStats] = useState({
     pacientes: 0,
     estoqueBaixo: 0,
@@ -15,27 +18,45 @@ export default function Dashboard() {
   });
 
   useEffect(() => {
+    // 1. Aguarda o usuário ser carregado pelo Contexto
+    if (!user) return;
+
+    // 2. Lógica de Proteção: Se NÃO for ADMIN, redireciona
+    if (user.perfil !== "ADMIN") {
+      switch (user.perfil) {
+        case "RECEPCAO":
+          router.push("/recepcao");
+          break;
+        case "MEDICO":
+          router.push("/medico");
+          break;
+        case "ENFERMAGEM":
+          router.push("/triagem");
+          break;
+        default:
+          router.push("/login"); // Se perfil for inválido, manda pro login
+      }
+      return; // Para a execução aqui para não buscar dados desnecessários
+    }
+
+    // 3. Se chegou aqui, é ADMIN. Então carrega os dados.
     carregarDados();
-  }, []);
+  }, [user, router]);
 
   async function carregarDados() {
     try {
-      // Fazemos várias chamadas em paralelo para montar o dashboard
       const [resPacientes, resEstoque, resFinanceiro, resFila] =
         await Promise.all([
           api.get("/recepcao/pacientes"),
           api.get("/estoque"),
           api.get("/financeiro"),
-          api.get("/recepcao/fila/triagem"), // Usando fila triagem como métrica de atividade
+          api.get("/recepcao/fila/triagem"),
         ]);
 
-      // Cálculos simples no front (idealmente seria no back)
       const estoqueBaixoCount = resEstoque.data.filter(
         (i) => i.qtdeAtual <= i.qtdeMinima
       ).length;
 
-      // Soma faturamento (supondo que a dataLancamento seja hoje)
-      // Aqui simplifiquei pegando o total geral para demonstração
       const totalFaturamento = resFinanceiro.data.reduce(
         (acc, curr) => acc + curr.valor,
         0
@@ -50,6 +71,11 @@ export default function Dashboard() {
     } catch (error) {
       console.error("Erro ao carregar dashboard", error);
     }
+  }
+
+  // Evita "piscar" a tela do Admin antes de redirecionar
+  if (!user || user.perfil !== "ADMIN") {
+    return null; // Ou coloque um <div className="p-8">Carregando...</div>
   }
 
   return (
@@ -117,7 +143,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Área de Gráficos / Avisos (Placeholder) */}
+      {/* Área de Gráficos / Avisos */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 min-h-[300px]">
           <h3 className="font-bold text-gray-700 mb-4">Avisos do Sistema</h3>
