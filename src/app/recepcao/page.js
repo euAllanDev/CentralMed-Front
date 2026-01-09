@@ -3,180 +3,346 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import api from "@/services/api";
-import { UserPlus, Calendar, Clock, Users, Search, X, CheckCircle } from "lucide-react";
+import { 
+  UserPlus, Calendar, Clock, Search, X, CheckCircle, 
+  Stethoscope, AlertCircle, Save 
+} from "lucide-react";
 
 export default function RecepcaoDashboard() {
-  // Estados para o Modal de Atendimento Imediato
   const [modalAberto, setModalAberto] = useState(false);
-  const [cpfBusca, setCpfBusca] = useState("");
-  const [pacienteEncontrado, setPacienteEncontrado] = useState(null);
-  const [loading, setLoading] = useState(false);
+  
+  // Dados para Listas
+  const [todosPacientes, setTodosPacientes] = useState([]);
+  const [listaMedicos, setListaMedicos] = useState([]); // Nova lista de médicos
+  
+  // Busca
+  const [termoBusca, setTermoBusca] = useState("");
+  const [resultados, setResultados] = useState([]);
+  const [pacienteSelecionado, setPacienteSelecionado] = useState(null);
+  
+  // Novo Cadastro (Completo)
+  const [modoCadastro, setModoCadastro] = useState(false);
+  const [novoPaciente, setNovoPaciente] = useState({ 
+    nome: "", 
+    cpf: "", 
+    dataNasc: "", 
+    convenio: "Particular",
+    alergiasComorbidades: "" // Adicionado campo extra
+  });
 
-  // Função para buscar paciente pelo CPF (Simulação de filtro local ou endpoint de busca)
-  async function buscarPaciente() {
-    if (!cpfBusca) return;
-    setLoading(true);
+  // Configuração do Atendimento
+  const [prioridade, setPrioridade] = useState("NORMAL");
+  const [medicoSelecionado, setMedicoSelecionado] = useState(""); // ID do médico ou vazio
+
+  // 1. Carrega dados iniciais (Pacientes e Médicos)
+  useEffect(() => {
+    carregarDadosIniciais();
+  }, []);
+
+  async function carregarDadosIniciais() {
     try {
-      // O ideal seria um endpoint /recepcao/pacientes?cpf=...
-      // Como temos o listar todos, vamos filtrar no front por enquanto para simplificar
-      const response = await api.get("/recepcao/pacientes");
-      const encontrado = response.data.find(p => p.cpf === cpfBusca);
-      
-      if (encontrado) {
-        setPacienteEncontrado(encontrado);
-      } else {
-        alert("Paciente não encontrado com este CPF.");
-        setPacienteEncontrado(null);
-      }
+      // Carrega pacientes
+      const resPacientes = await api.get("/recepcao/pacientes");
+      setTodosPacientes(resPacientes.data);
+
+      // Carrega médicos (Se der erro 403, avise para liberar no SecurityConfig)
+      const resMedicos = await api.get("/admin/profissionais/medicos");
+      setListaMedicos(resMedicos.data);
     } catch (error) {
-      alert("Erro ao buscar paciente.");
-    } finally {
-      setLoading(false);
+      console.error("Erro ao carregar dados.", error);
     }
   }
 
-  // Função que cria o agendamento "Walk-in"
-  async function confirmarAtendimentoImediato() {
-    if (!pacienteEncontrado) return;
+  // 2. Filtra busca
+  useEffect(() => {
+    if (termoBusca.length < 2) {
+      setResultados([]);
+      return;
+    }
+    const filtrados = todosPacientes.filter(p => 
+      p.nome.toLowerCase().includes(termoBusca.toLowerCase()) || 
+      p.cpf.includes(termoBusca)
+    );
+    setResultados(filtrados);
+  }, [termoBusca, todosPacientes]);
+
+  // 3. Cadastrar Paciente (Completo agora)
+  async function cadastrarPaciente() {
+    if(!novoPaciente.nome || !novoPaciente.cpf) {
+        alert("Preencha os campos obrigatórios.");
+        return;
+    }
+    try {
+      const res = await api.post("/recepcao/pacientes", novoPaciente);
+      alert("Paciente cadastrado com sucesso!");
+      
+      // Atualiza lista local e seleciona o novo paciente
+      setTodosPacientes([...todosPacientes, res.data]);
+      setPacienteSelecionado(res.data);
+      setModoCadastro(false);
+    } catch (error) {
+      alert("Erro ao cadastrar. Verifique se o CPF já existe.");
+    }
+  }
+
+  // 4. Confirmar Atendimento (Com Prioridade e Médico)
+  async function confirmarAtendimento() {
+    if (!pacienteSelecionado) return;
     
     try {
       const payload = {
-        pacienteId: pacienteEncontrado.id,
-        medicoId: null // Null = Triagem Geral (sem médico específico)
+        pacienteId: pacienteSelecionado.id,
+        medicoId: medicoSelecionado || null, // Se vazio, manda null (Triagem Geral)
+        prioridade: prioridade
       };
 
       const response = await api.post("/recepcao/atendimento-imediato", payload);
       
-      alert(`✅ Check-in Realizado!\n\nPaciente: ${pacienteEncontrado.nome}\nSenha: ${response.data.senhaPainel}\nStatus: Fila da Triagem`);
+      // Formatar mensagem de sucesso
+      const nomeMedico = listaMedicos.find(m => m.id == medicoSelecionado)?.nome || "Qualquer Médico (Fila Geral)";
       
-      // Limpa e fecha
-      setModalAberto(false);
-      setPacienteEncontrado(null);
-      setCpfBusca("");
+      alert(`✅ Senha Gerada: ${response.data.senhaPainel}\n\nPaciente: ${pacienteSelecionado.nome}\nMédico: ${nomeMedico}\nPrioridade: ${prioridade}`);
+      
+      fecharModal();
     } catch (error) {
-      alert("Erro ao realizar atendimento.");
+      alert("Erro ao gerar atendimento.");
       console.error(error);
     }
+  }
+
+  function fecharModal() {
+    setModalAberto(false);
+    setPacienteSelecionado(null);
+    setTermoBusca("");
+    setModoCadastro(false);
+    setPrioridade("NORMAL");
+    setMedicoSelecionado("");
+    setNovoPaciente({ nome: "", cpf: "", dataNasc: "", convenio: "Particular", alergiasComorbidades: "" });
   }
 
   return (
     <div className="space-y-8 relative">
       
-      {/* Cabeçalho */}
       <div>
         <h1 className="text-3xl font-bold text-gray-800">Recepção</h1>
         <p className="text-gray-500">Gestão de fluxo e atendimento</p>
       </div>
 
-      {/* Cards de Ação */}
+      {/* Cards Principais */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Link href="/recepcao/pacientes" className="group">
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md hover:border-blue-200 transition-all cursor-pointer h-full flex flex-col items-center justify-center text-center gap-4">
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:border-blue-200 transition-all cursor-pointer h-full flex flex-col items-center justify-center text-center gap-4">
             <div className="bg-blue-100 p-4 rounded-full text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
               <UserPlus size={32} />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-gray-700">Novo Paciente</h3>
-              <p className="text-sm text-gray-400">Cadastrar ficha completa</p>
+              <h3 className="text-lg font-bold text-gray-700">Gestão de Pacientes</h3>
+              <p className="text-sm text-gray-400">Ver lista completa ou editar</p>
             </div>
           </div>
         </Link>
 
         <Link href="/recepcao/agenda" className="group">
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md hover:border-green-200 transition-all cursor-pointer h-full flex flex-col items-center justify-center text-center gap-4">
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:border-green-200 transition-all cursor-pointer h-full flex flex-col items-center justify-center text-center gap-4">
             <div className="bg-green-100 p-4 rounded-full text-green-600 group-hover:bg-green-600 group-hover:text-white transition-colors">
               <Calendar size={32} />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-gray-700">Agenda & Check-in</h3>
-              <p className="text-sm text-gray-400">Confirmar presença</p>
+              <h3 className="text-lg font-bold text-gray-700">Agenda do Dia</h3>
+              <p className="text-sm text-gray-400">Pacientes agendados previamente</p>
             </div>
           </div>
         </Link>
 
-        {/* Botão Atendimento Imediato (Abre Modal) */}
-        <div className="bg-gradient-to-br from-purple-600 to-purple-800 p-6 rounded-xl shadow-md text-white flex flex-col justify-between h-full">
+        {/* Botão Roxo */}
+        <div className="bg-gradient-to-br from-purple-700 to-indigo-800 p-6 rounded-xl shadow-md text-white flex flex-col justify-between h-full">
           <div>
             <div className="bg-white/20 w-fit p-2 rounded mb-3">
               <Clock size={24} />
             </div>
-            <h3 className="text-xl font-bold">Chegou Agora?</h3>
+            <h3 className="text-xl font-bold">Atendimento Imediato</h3>
             <p className="text-purple-200 text-sm mt-1">
-              Atendimento imediato sem agendamento prévio.
+              Chegou agora? Busque ou cadastre e gere a senha em segundos.
             </p>
           </div>
           <button 
             onClick={() => setModalAberto(true)}
-            className="bg-white text-purple-700 py-2 px-4 rounded font-bold hover:bg-purple-50 transition-colors w-full mt-4"
+            className="bg-white text-purple-800 py-3 px-4 rounded-lg font-bold hover:bg-purple-50 transition-colors w-full mt-4 shadow-lg"
           >
             Iniciar Atendimento
           </button>
         </div>
       </div>
 
-      {/* --- MODAL DE ATENDIMENTO IMEDIATO --- */}
+      {/* --- MODAL UNIFICADO --- */}
       {modalAberto && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[95vh]">
             
-            {/* Header Modal */}
-            <div className="bg-purple-700 p-4 flex justify-between items-center text-white">
-              <h3 className="font-bold flex items-center gap-2">
-                <Clock size={20} /> Atendimento Imediato
+            <div className="bg-gray-50 p-4 border-b flex justify-between items-center">
+              <h3 className="font-bold text-gray-700 flex items-center gap-2">
+                <Clock size={20} className="text-purple-600" /> Novo Atendimento
               </h3>
-              <button onClick={() => setModalAberto(false)} className="hover:bg-white/20 p-1 rounded">
-                <X size={20} />
-              </button>
+              <button onClick={fecharModal}><X size={20} className="text-gray-400 hover:text-red-500" /></button>
             </div>
 
-            {/* Corpo Modal */}
-            <div className="p-6 space-y-4">
-              {!pacienteEncontrado ? (
-                <>
-                  <p className="text-sm text-gray-600">Busque o paciente pelo CPF para gerar a senha.</p>
-                  <div className="flex gap-2">
-                    <input 
-                      type="text" 
-                      placeholder="CPF (Ex: 111.222.333-44)" 
-                      className="flex-1 border p-2 rounded focus:outline-purple-500"
-                      value={cpfBusca}
-                      onChange={(e) => setCpfBusca(e.target.value)}
-                    />
+            <div className="p-6 overflow-y-auto">
+              
+              {/* ETAPA 1: Buscar Paciente */}
+              {!pacienteSelecionado && !modoCadastro && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-semibold text-gray-600 mb-1 block">Quem será atendido?</label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-3 text-gray-400" size={20} />
+                      <input 
+                        autoFocus
+                        type="text" 
+                        placeholder="Digite o Nome ou CPF..." 
+                        className="w-full pl-10 p-3 border rounded-lg focus:ring-2 ring-purple-500 outline-none"
+                        value={termoBusca}
+                        onChange={(e) => setTermoBusca(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {resultados.map(p => (
+                      <div key={p.id} onClick={() => setPacienteSelecionado(p)} className="flex justify-between items-center p-3 border rounded hover:bg-purple-50 cursor-pointer transition-colors group">
+                        <div>
+                          <p className="font-bold text-gray-700 group-hover:text-purple-700">{p.nome}</p>
+                          <p className="text-xs text-gray-500">{p.cpf} • {p.convenio}</p>
+                        </div>
+                        <CheckCircle size={18} className="text-gray-300 group-hover:text-purple-600" />
+                      </div>
+                    ))}
+                    
+                    {termoBusca.length > 1 && resultados.length === 0 && (
+                      <div className="text-center p-4 text-gray-500 bg-gray-50 rounded">
+                        Nenhum paciente encontrado.
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="border-t pt-4">
                     <button 
-                      onClick={buscarPaciente}
-                      disabled={loading}
-                      className="bg-purple-600 text-white p-2 rounded hover:bg-purple-700 disabled:opacity-50"
+                      onClick={() => setModoCadastro(true)}
+                      className="w-full py-3 text-purple-700 font-bold hover:bg-purple-50 rounded-lg border border-dashed border-purple-300 flex justify-center items-center gap-2"
                     >
-                      <Search size={20} />
+                      <UserPlus size={20} /> Cadastrar Novo Paciente Agora
                     </button>
                   </div>
-                  <div className="text-center text-xs text-gray-400 mt-2">
-                    *Para teste, use o CPF do paciente que você cadastrou (Ex: 111.222.333-44)
+                </div>
+              )}
+
+              {/* ETAPA 2: Cadastro Completo */}
+              {modoCadastro && (
+                <div className="space-y-4 animate-in fade-in slide-in-from-right duration-200">
+                  <div className="flex justify-between items-center">
+                    <h4 className="font-bold text-gray-700 text-lg">Cadastro de Paciente</h4>
+                    <span className="text-xs text-gray-400">* Campos obrigatórios</span>
                   </div>
-                </>
-              ) : (
-                <div className="bg-green-50 border border-green-200 rounded p-4 text-center space-y-3">
-                  <div className="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto">
-                    <UserPlus size={24} />
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="md:col-span-2">
+                        <label className="text-xs font-semibold text-gray-500">Nome Completo *</label>
+                        <input type="text" className="w-full border p-2 rounded focus:outline-blue-500" 
+                        value={novoPaciente.nome} onChange={e => setNovoPaciente({...novoPaciente, nome: e.target.value})} />
+                    </div>
+                    
+                    <div>
+                        <label className="text-xs font-semibold text-gray-500">CPF *</label>
+                        <input type="text" className="w-full border p-2 rounded focus:outline-blue-500" 
+                        value={novoPaciente.cpf} onChange={e => setNovoPaciente({...novoPaciente, cpf: e.target.value})} />
+                    </div>
+                    
+                    <div>
+                        <label className="text-xs font-semibold text-gray-500">Data Nasc. *</label>
+                        <input type="date" className="w-full border p-2 rounded focus:outline-blue-500" 
+                        value={novoPaciente.dataNasc} onChange={e => setNovoPaciente({...novoPaciente, dataNasc: e.target.value})} />
+                    </div>
+
+                    <div>
+                        <label className="text-xs font-semibold text-gray-500">Convênio</label>
+                        <select className="w-full border p-2 rounded focus:outline-blue-500 bg-white"
+                            value={novoPaciente.convenio} onChange={e => setNovoPaciente({...novoPaciente, convenio: e.target.value})}>
+                            <option value="Particular">Particular</option>
+                            <option value="Unimed">Unimed</option>
+                            <option value="Bradesco">Bradesco</option>
+                            <option value="SUS">SUS</option>
+                        </select>
+                    </div>
+
+                    <div className="md:col-span-2">
+                        <label className="text-xs font-semibold text-gray-500">Alergias / Comorbidades</label>
+                        <input type="text" placeholder="Ex: Diabético, Alergia a Dipirona" className="w-full border p-2 rounded focus:outline-blue-500" 
+                        value={novoPaciente.alergiasComorbidades} onChange={e => setNovoPaciente({...novoPaciente, alergiasComorbidades: e.target.value})} />
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="font-bold text-gray-800">{pacienteEncontrado.nome}</h4>
-                    <p className="text-sm text-gray-500">Convênio: {pacienteEncontrado.convenio}</p>
+
+                  <div className="flex gap-3 pt-4 border-t">
+                    <button onClick={() => setModoCadastro(false)} className="flex-1 py-2 text-gray-600 border rounded hover:bg-gray-50">Cancelar</button>
+                    <button onClick={cadastrarPaciente} className="flex-1 py-2 bg-blue-600 text-white rounded font-bold hover:bg-blue-700 flex items-center justify-center gap-2">
+                        <Save size={18} /> Salvar e Continuar
+                    </button>
                   </div>
+                </div>
+              )}
+
+              {/* ETAPA 3: Configurar Atendimento */}
+              {pacienteSelecionado && (
+                <div className="space-y-6 animate-in fade-in zoom-in duration-200">
+                  <div className="bg-green-50 p-4 rounded-lg border border-green-200 flex justify-between items-center">
+                    <div>
+                        <p className="text-xs text-green-600 font-bold uppercase mb-1">Paciente Selecionado</p>
+                        <h2 className="text-xl font-bold text-gray-800">{pacienteSelecionado.nome}</h2>
+                        <p className="text-sm text-gray-500">{pacienteSelecionado.convenio}</p>
+                    </div>
+                    <button onClick={() => setPacienteSelecionado(null)} className="text-sm text-green-700 underline">Alterar</button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Prioridade */}
+                    <div>
+                        <label className="text-sm font-bold text-gray-700 mb-2 block">Classificação de Prioridade</label>
+                        <select
+                        className="w-full p-3 border rounded bg-white focus:ring-2 ring-green-500 outline-none"
+                        value={prioridade}
+                        onChange={(e) => setPrioridade(e.target.value)}
+                        >
+                        <option value="NORMAL">Normal</option>
+                        <option value="PREFERENCIAL">Preferencial (60+, Gestantes)</option>
+                        <option value="ALTA_PRIORIDADE">Prioridade Máxima (80+, PCD)</option>
+                        </select>
+                    </div>
+
+                    {/* Escolha do Médico */}
+                    <div>
+                        <label className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+                            <Stethoscope size={16} /> Preferência de Médico
+                        </label>
+                        <select
+                        className="w-full p-3 border rounded bg-white focus:ring-2 ring-blue-500 outline-none"
+                        value={medicoSelecionado}
+                        onChange={(e) => setMedicoSelecionado(e.target.value)}
+                        >
+                        <option value="">Sem preferência (Primeiro disponível)</option>
+                        {listaMedicos.map(medico => (
+                            <option key={medico.id} value={medico.id}>{medico.nome}</option>
+                        ))}
+                        </select>
+                    </div>
+                  </div>
+
                   <button 
-                    onClick={confirmarAtendimentoImediato}
-                    className="w-full bg-green-600 text-white py-2 rounded font-bold hover:bg-green-700 flex items-center justify-center gap-2"
+                    onClick={confirmarAtendimento}
+                    className="w-full bg-green-600 text-white py-4 rounded-lg font-bold hover:bg-green-700 shadow-lg flex items-center justify-center gap-2 text-lg mt-4"
                   >
-                    <CheckCircle size={18} /> Confirmar e Gerar Senha
-                  </button>
-                  <button 
-                    onClick={() => setPacienteEncontrado(null)}
-                    className="text-xs text-gray-500 underline"
-                  >
-                    Buscar outro paciente
+                    <CheckCircle size={24} /> Confirmar Chegada
                   </button>
                 </div>
               )}
+
             </div>
           </div>
         </div>

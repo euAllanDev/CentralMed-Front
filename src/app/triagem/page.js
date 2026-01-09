@@ -64,6 +64,17 @@ export default function TriagemPage() {
     }
   }
 
+  function BadgePrioridade({ tipo }) {
+    if (tipo === "ALTA_PRIORIDADE") {
+      return <span className="bg-red-100 text-red-700 text-[10px] font-bold px-2 py-1 rounded-full uppercase">Prioridade Max</span>;
+    }
+    if (tipo === "PREFERENCIAL") {
+      return <span className="bg-yellow-100 text-yellow-700 text-[10px] font-bold px-2 py-1 rounded-full uppercase">Preferencial</span>;
+    }
+    return null; // Normal não precisa de badge
+  }
+
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[calc(100vh-100px)]">
       {/* Coluna da Esquerda: Fila de Espera */}
@@ -80,12 +91,15 @@ export default function TriagemPage() {
             <div
               key={item.id}
               onClick={() => selecionarPaciente(item)}
-              className={`p-3 rounded border cursor-pointer hover:bg-blue-50 transition-colors ${
-                pacienteSelecionado?.id === item.id
+              className={`p-3 rounded border cursor-pointer hover:bg-blue-50 transition-colors ${pacienteSelecionado?.id === item.id
                   ? "bg-blue-50 border-blue-400"
                   : "bg-gray-50"
-              }`}
+                }`}
             >
+              <div className="flex justify-between items-center">
+                <span className="font-bold text-gray-800">{item.senhaPainel}</span>
+                <BadgePrioridade tipo={item.prioridade} /> {/* <--- ADICIONE AQUI */}
+              </div>
               <div className="flex justify-between">
                 <span className="font-bold text-gray-800">
                   {item.senhaPainel}
