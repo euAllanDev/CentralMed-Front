@@ -10,7 +10,7 @@ import {
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { user, login, logout } = useAuth();
+  const { user, logout } = useAuth(); // Removido 'login' pois não é usado aqui
 
   const menuItems = [
     // --- Admin ---
@@ -23,13 +23,13 @@ export default function Sidebar() {
       name: "Painel Inicial", href: "/recepcao", icon: LayoutGrid, roles: ["RECEPCAO"] 
     },
     { 
-      name: "Agenda do Dia", // Foco no HOJE
+      name: "Agenda do Dia",
       href: "/recepcao/agenda", 
       icon: Clock, 
       roles: ["ADMIN", "RECEPCAO"] 
     },
     { 
-      name: "Agenda Geral", // Foco no FUTURO
+      name: "Agenda Geral",
       href: "/recepcao/agenda-geral", 
       icon: Calendar, 
       roles: ["ADMIN", "RECEPCAO"] 
@@ -53,10 +53,15 @@ export default function Sidebar() {
     { 
       name: "Estoque", href: "/estoque", icon: Package, roles: ["ADMIN", "ENFERMAGEM", "MEDICO"] 
     },
+    // --- NOVO ITEM ADICIONADO AQUI ---
+    { 
+      name: "Convênios (TISS)", 
+      href: "/admin/convenios", 
+      icon: BookOpen, 
+      roles: ["ADMIN"] 
+    },
   ];
 
-  // ... (Mantenha o resto do código de filtro e renderização igual ao anterior)
-  // Apenas copie o array menuItems acima e mantenha a lógica de return do componente
   const filteredItems = menuItems.filter(item => {
     if (!user) return false;
     if (user.perfil === "ADMIN") return true; 
@@ -65,7 +70,7 @@ export default function Sidebar() {
 
   return (
     <aside className="w-64 bg-white shadow-md flex flex-col h-full border-r border-gray-200">
-      {/* ... Cabeçalho e User Info iguais ... */}
+      
       <div className="h-16 flex items-center justify-center border-b border-gray-100">
         <Link href={user?.perfil === 'RECEPCAO' ? '/recepcao' : '/'} className="text-2xl font-extrabold text-blue-600 tracking-tight cursor-pointer">
           Central<span className="text-gray-700">Med</span>
