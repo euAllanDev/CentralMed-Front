@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import api from "@/services/api";
-import { Package, Plus, AlertCircle, Calendar, Trash2 } from "lucide-react";
+import { Package, Plus, AlertCircle } from "lucide-react";
 
 export default function EstoquePage() {
   const [itens, setItens] = useState([]);
@@ -10,7 +10,7 @@ export default function EstoquePage() {
     nome: "", 
     qtdeAtual: "", 
     qtdeMinima: "", 
-    dataValidade: "" // Novo campo no estado
+    dataValidade: "" 
   });
 
   useEffect(() => {
@@ -22,7 +22,7 @@ export default function EstoquePage() {
       const response = await api.get("/estoque");
       setItens(response.data);
     } catch (error) {
-      console.error(error);
+      console.error("Erro ao carregar estoque", error);
     }
   }
 
@@ -83,7 +83,7 @@ export default function EstoquePage() {
             />
           </div>
           <div>
-            <label className="text-xs font-bold text-gray-500 mb-1 block">Validade</label>
+            <label className="text-xs font-bold text-gray-500 mb-1 block">Validade (Anvisa)</label>
             <input
               type="date" 
               className="w-full border p-2 rounded focus:outline-blue-500"
@@ -105,7 +105,7 @@ export default function EstoquePage() {
               <th className="p-4 font-semibold">Item</th>
               <th className="p-4 font-semibold">Qtd. Atual</th>
               <th className="p-4 font-semibold">Validade</th>
-              <th className="p-4 font-semibold">Status (Anvisa)</th>
+              <th className="p-4 font-semibold">Status</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -145,7 +145,7 @@ export default function EstoquePage() {
                     <span className="text-gray-400 text-xs ml-1">/ min {item.qtdeMinima}</span>
                   </td>
                   <td className="p-4 text-gray-600 font-mono text-xs">
-                    {item.dataValidade ? new Date(item.dataValidade).toLocaleDateString('pt-BR') : "-"}
+                    {item.dataValidade ? new Date(item.dataValidade).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : "-"}
                   </td>
                   <td className="p-4">
                     {statusValidade}
