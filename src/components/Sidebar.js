@@ -1,90 +1,62 @@
 "use client";
 
-
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { 
-  Home, 
-  Users, 
-  Calendar, 
-  Activity, 
-  Stethoscope, 
-  DollarSign, 
-  Package, 
-  LogOut,
-  LayoutGrid // Novo ícone para o painel
+  Home, Users, Calendar, Activity, Stethoscope, 
+  DollarSign, // <--- JÁ ESTÁ AQUI
+  Package, LogOut, LayoutGrid, 
+  BookOpen, // <--- GARANTA QUE ESTE ESTÁ AQUI
+  Clock, FileUp
 } from "lucide-react";
 
 export default function Sidebar() {
   const pathname = usePathname();
   const { user, login, logout } = useAuth();
 
-  // Definição dos itens do menu
-  const menuItems = [
-    // 1. Dashboard GERAL (Só Admin)
+const menuItems = [
+    // Roteamento Geral (Sem grupo)
+    { name: "Dashboard", href: "/", icon: Home, roles: ["ADMIN"] },
+    { name: "Painel Recepção", href: "/recepcao", icon: LayoutGrid, roles: ["RECEPCAO"] },
     { 
-      name: "Dashboard (Admin)", 
-      href: "/", 
-      icon: Home, 
-      roles: ["ADMIN"] 
-    },
-
-    { 
-      name: "Gestão Usuários", 
+      name: "Gestão Usuários", // <-- ADICIONE DE VOLTA AQUI
       href: "/admin/usuarios", 
       icon: Users, 
-      roles: ["ADMIN"] 
+      roles: ["ADMIN"], 
+      group: "gestao" 
     },
-
-    // 2. Painel da Recepção (O botão que faltava!)
+    { name: "Consultório", href: "/medico", icon: Stethoscope, roles: ["ADMIN", "MEDICO"] },
+    { name: "Triagem", href: "/triagem", icon: Activity, roles: ["ADMIN", "ENFERMAGEM"] },
+    
+    
+    // Grupo de Gestão
+    { name: "Pacientes", href: "/recepcao/pacientes", icon: Users, roles: ["ADMIN", "RECEPCAO"], group: "gestao" },
+    { name: "Agenda do Dia", href: "/recepcao/agenda", icon: Clock, roles: ["ADMIN", "RECEPCAO"], group: "gestao" },
+    
+    // Grupo de Faturamento e Operacional
+    { name: "Caixa", href: "/financeiro", icon: DollarSign, roles: ["ADMIN", "RECEPCAO"], group: "financeiro" },
+    { name: "Estoque", href: "/estoque", icon: Package, roles: ["ADMIN", "ENFERMAGEM"], group: "financeiro" },
     { 
-      name: "Painel Inicial", 
-      href: "/recepcao", 
-      icon: LayoutGrid, 
-      roles: ["RECEPCAO"] 
-    },
-
-    // --- Módulos da Recepção ---
-    { 
-      name: "Pacientes", 
-      href: "/recepcao/pacientes", 
-      icon: Users, 
-      roles: ["ADMIN", "RECEPCAO"] 
-    },
-    { 
-      name: "Agenda", 
-      href: "/recepcao/agenda", 
-      icon: Calendar, 
-      roles: ["ADMIN", "RECEPCAO"] 
-    },
-
-    // --- Módulos Clínicos ---
-    { 
-      name: "Triagem", 
-      href: "/triagem", 
-      icon: Activity, 
-      roles: ["ADMIN", "ENFERMAGEM"] 
+      name: "Parâmetros TISS", 
+      href: "/admin/convenios", // <-- CORRIGIDO AQUI
+      icon: BookOpen, 
+      roles: ["ADMIN"], 
+      group: "financeiro" 
     },
     { 
-      name: "Consultório", 
-      href: "/medico", 
-      icon: Stethoscope, 
-      roles: ["ADMIN", "MEDICO"] 
-    },
-
-    // --- Operacional ---
-    { 
-      name: "Financeiro", 
-      href: "/financeiro", 
+      name: 'Tabela de Preços', 
+      href: '/admin/precos', // <-- CORRIGIDO AQUI
       icon: DollarSign, 
-      roles: ["ADMIN", "RECEPCAO"] 
+      roles: ['ADMIN'], 
+      group: 'financeiro' 
     },
     { 
-      name: "Estoque", 
-      href: "/estoque", 
-      icon: Package, 
-      roles: ["ADMIN", "ENFERMAGEM", "MEDICO"] 
+      name: 'Faturar Lotes', 
+      href: '/admin/faturamento', 
+      icon: FileUp, 
+      roles: ['ADMIN'], 
+      group: 'financeiro' 
     },
   ];
 
@@ -98,7 +70,8 @@ export default function Sidebar() {
   return (
     <aside className="w-64 bg-white shadow-md flex flex-col h-full border-r border-gray-200">
       
-      {/* 1. Cabeçalho / Logo (Link inteligente para a home do usuário) */}
+      {/* (Seu cabeçalho, info do usuário e a <nav> continuam intactos) */}
+      
       <div className="h-16 flex items-center justify-center border-b border-gray-100">
         <Link 
           href={user?.perfil === 'RECEPCAO' ? '/recepcao' : user?.perfil === 'MEDICO' ? '/medico' : '/'} 
@@ -108,7 +81,6 @@ export default function Sidebar() {
         </Link>
       </div>
 
-      {/* 2. Info do Usuário */}
       <div className="bg-blue-50 p-4 border-b border-blue-100 flex flex-col items-center">
         <div className="w-12 h-12 bg-blue-200 rounded-full flex items-center justify-center text-blue-700 font-bold mb-2">
           {user?.nome?.charAt(0).toUpperCase() || "U"}
@@ -121,7 +93,6 @@ export default function Sidebar() {
         </span>
       </div>
 
-      {/* 3. Navegação */}
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
         {filteredItems.map((item) => {
           const Icon = item.icon;
@@ -134,7 +105,7 @@ export default function Sidebar() {
               className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 group ${
                 isActive
                   ? "bg-blue-600 text-white shadow-md shadow-blue-200"
-                  : "text-gray-600 hover:bg-blue-50 hover:text-blue-600"
+                  : "text-gray-600 hover:bg-blue-50 hover:bg-blue-600"
               }`}
             >
               <Icon size={20} className={isActive ? "text-white" : "text-gray-400 group-hover:text-blue-500"} />
@@ -144,7 +115,6 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* 4. Logout */}
       <div className="p-4 border-t border-gray-100 bg-gray-50">
         <button 
           onClick={logout}
