@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import api from "@/services/api";
+import EmailService from "@/services/EmailService";
 import {
   UserPlus,
   Calendar,
@@ -19,36 +20,31 @@ import {
 } from "lucide-react";
 
 export default function RecepcaoDashboard() {
-  // Estados de Controle e Dados
   const [modalAberto, setModalAberto] = useState(false);
   const [todosPacientes, setTodosPacientes] = useState([]);
   const [listaMedicos, setListaMedicos] = useState([]);
-  const [loadingDados, setLoadingDados] = useState(false); // Loading inicial
-  const [loadingAction, setLoadingAction] = useState(false); // Loading de botões
-
-  // Estados do Modal / Fluxo
+  const [loadingDados, setLoadingDados] = useState(true);
+  const [loadingAction, setLoadingAction] = useState(false);
   const [termoBusca, setTermoBusca] = useState("");
   const [resultados, setResultados] = useState([]);
   const [pacienteSelecionado, setPacienteSelecionado] = useState(null);
   const [modoCadastro, setModoCadastro] = useState(false);
 
-  // Dados do Formulário
-  const [novoPaciente, setNovoPaciente] = useState({
+  const initialFormState = {
     nome: "",
     cpf: "",
     dataNasc: "",
     convenio: "Particular",
     alergiasComorbidades: "",
-  });
+    email: "",
+  };
+  const [novoPaciente, setNovoPaciente] = useState(initialFormState);
 
   const [prioridade, setPrioridade] = useState("NORMAL");
   const [medicoSelecionado, setMedicoSelecionado] = useState("");
   const [dataAtual, setDataAtual] = useState("");
 
-  // --- EFEITOS ---
-
   useEffect(() => {
-    // Formata a data de forma mais elegante
     const hoje = new Date();
     const opcoes = {
       weekday: "long",
@@ -56,13 +52,10 @@ export default function RecepcaoDashboard() {
       month: "long",
       day: "numeric",
     };
-    // @ts-ignore
     setDataAtual(hoje.toLocaleDateString("pt-BR", opcoes));
-
     carregarDadosIniciais();
   }, []);
 
-  // Filtro de busca
   useEffect(() => {
     if (termoBusca.length < 2) {
       setResultados([]);
@@ -77,8 +70,6 @@ export default function RecepcaoDashboard() {
     setResultados(filtrados);
   }, [termoBusca, todosPacientes]);
 
-  // --- FUNÇÕES ---
-
   async function carregarDadosIniciais() {
     setLoadingDados(true);
     try {
@@ -92,7 +83,6 @@ export default function RecepcaoDashboard() {
       setListaMedicos(Array.isArray(resMedicos.data) ? resMedicos.data : []);
     } catch (error) {
       console.error("Erro ao carregar dados:", error);
-      // Aqui você poderia colocar um toast de erro
     } finally {
       setLoadingDados(false);
     }
@@ -105,48 +95,33 @@ export default function RecepcaoDashboard() {
 
   async function cadastrarPaciente() {
     if (!novoPaciente.nome || !novoPaciente.cpf) {
-      alert("Por favor, preencha Nome e CPF.");
-      return;
+      return alert("Por favor, preencha Nome e CPF.");
     }
-
     setLoadingAction(true);
     try {
-      // Exemplo de chamada real
       const res = await api.post("/recepcao/pacientes", novoPaciente);
-
-      // Atualiza lista local e seleciona o paciente criado
       const criado = res.data;
       setTodosPacientes((prev) => [...prev, criado]);
       setPacienteSelecionado(criado);
       setModoCadastro(false);
-      // Limpa formulário
-      setNovoPaciente({
-        nome: "",
-        cpf: "",
-        dataNasc: "",
-        convenio: "Particular",
-        alergiasComorbidades: "",
-      });
+      setNovoPaciente(initialFormState);
     } catch (error) {
       console.error("Erro ao cadastrar:", error);
-      alert("Erro ao cadastrar paciente.");
+      alert("Erro ao cadastrar paciente. O CPF pode já existir.");
     } finally {
       setLoadingAction(false);
     }
   }
+
   async function confirmarAtendimento() {
     if (!pacienteSelecionado) return;
-
     setLoadingAction(true);
     try {
-      // --- CORREÇÃO AQUI ---
-      // A API espera /recepcao/atendimento-imediato com um payload específico.
       const payload = {
         pacienteId: pacienteSelecionado.id,
         medicoId: medicoSelecionado || null,
-        prioridade: prioridade,
+        prioridade,
       };
-
       const response = await api.post(
         "/recepcao/atendimento-imediato",
         payload,
@@ -155,11 +130,13 @@ export default function RecepcaoDashboard() {
       const nomeMedico =
         listaMedicos.find((m) => m.id == medicoSelecionado)?.nome ||
         "Fila Geral";
-
       alert(
         `Atendimento iniciado!\n\nSenha: ${response.data.senhaPainel}\nFila: ${nomeMedico}`,
       );
-      // --------------------
+
+      EmailService.sendReminder(response.data)
+        .then(() => console.log("Email de notificação disparado."))
+        .catch((err) => console.error("Falha ao enviar email:", err));
 
       fecharModal();
     } catch (error) {
@@ -172,7 +149,6 @@ export default function RecepcaoDashboard() {
 
   function fecharModal() {
     setModalAberto(false);
-    // Resetar estados internos do modal
     setTimeout(() => {
       setPacienteSelecionado(null);
       setModoCadastro(false);
@@ -180,12 +156,12 @@ export default function RecepcaoDashboard() {
       setResultados([]);
       setPrioridade("NORMAL");
       setMedicoSelecionado("");
+      setNovoPaciente(initialFormState);
     }, 200);
   }
 
   return (
     <div className="min-h-screen bg-gray-50 p-6 font-sans text-gray-800">
-      {/* --- HEADER --- */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-gray-200 pb-6 mb-8 gap-4">
         <div>
           <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">
@@ -206,9 +182,7 @@ export default function RecepcaoDashboard() {
         </div>
       </div>
 
-      {/* --- DASHBOARD GRID --- */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Card Principal - Ação Rápida */}
         <div className="lg:col-span-2">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex flex-col md:flex-row h-full transition-shadow hover:shadow-md">
             <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-8 text-white md:w-1/3 flex flex-col justify-center items-center text-center">
@@ -220,15 +194,13 @@ export default function RecepcaoDashboard() {
                 Check-in de pacientes
               </p>
             </div>
-
             <div className="p-8 flex-1 flex flex-col justify-center items-start bg-white">
               <h3 className="text-xl font-bold text-gray-800 mb-2">
                 Fluxo de Encaixe & Chegada
               </h3>
               <p className="text-gray-500 mb-6 leading-relaxed">
-                Utilize este painel para registrar a chegada de pacientes
-                agendados ou criar fichas para atendimentos de
-                emergência/encaixe.
+                Utilize este painel para registrar a chegada de pacientes ou
+                criar fichas para atendimentos de emergência.
               </p>
               <button
                 onClick={() => setModalAberto(true)}
@@ -244,8 +216,6 @@ export default function RecepcaoDashboard() {
             </div>
           </div>
         </div>
-
-        {/* Cards Secundários */}
         <div className="space-y-4">
           <Link href="/recepcao/agenda" className="block group">
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 group-hover:border-blue-300 group-hover:shadow-md transition-all flex items-center gap-4">
@@ -258,7 +228,6 @@ export default function RecepcaoDashboard() {
               </div>
             </div>
           </Link>
-
           <Link href="/recepcao/pacientes" className="block group">
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 group-hover:border-blue-300 group-hover:shadow-md transition-all flex items-center gap-4">
               <div className="bg-green-100 p-3 rounded-lg text-green-600">
@@ -274,15 +243,11 @@ export default function RecepcaoDashboard() {
           </Link>
         </div>
       </div>
-
-      {/* --- MODAL --- */}
       {modalAberto && (
         <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
-            {/* Header do Modal */}
             <div className="bg-gray-50 px-6 py-4 border-b border-gray-200 flex justify-between items-center sticky top-0 z-10">
               <div className="flex items-center gap-3">
-                {/* Botão de voltar condicional */}
                 {(modoCadastro || pacienteSelecionado) && (
                   <button
                     onClick={() => {
@@ -310,10 +275,7 @@ export default function RecepcaoDashboard() {
                 <X size={20} />
               </button>
             </div>
-
-            {/* Corpo do Modal */}
             <div className="p-6 overflow-y-auto custom-scrollbar">
-              {/* ESTADO 1: BUSCA */}
               {!pacienteSelecionado && !modoCadastro && (
                 <div className="space-y-6">
                   <div className="relative">
@@ -330,8 +292,6 @@ export default function RecepcaoDashboard() {
                       onChange={(e) => setTermoBusca(e.target.value)}
                     />
                   </div>
-
-                  {/* Resultados da Busca */}
                   <div className="space-y-2 min-h-[200px]">
                     {termoBusca.length > 1 && resultados.length === 0 && (
                       <div className="text-center py-8 text-gray-500">
@@ -342,7 +302,6 @@ export default function RecepcaoDashboard() {
                         <p>Nenhum paciente encontrado.</p>
                       </div>
                     )}
-
                     {resultados.map((p) => (
                       <button
                         key={p.id}
@@ -367,7 +326,6 @@ export default function RecepcaoDashboard() {
                       </button>
                     ))}
                   </div>
-
                   <div className="border-t pt-4">
                     <button
                       onClick={() => setModoCadastro(true)}
@@ -379,21 +337,18 @@ export default function RecepcaoDashboard() {
                   </div>
                 </div>
               )}
-
-              {/* ESTADO 2: CADASTRO */}
               {modoCadastro && (
                 <div className="space-y-4">
                   <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 flex gap-3 items-start mb-4">
                     <AlertCircle
                       className="text-blue-600 shrink-0 mt-0.5"
                       size={18}
-                    />
+                    />{" "}
                     <p className="text-sm text-blue-800">
                       Preencha os dados básicos para criar a ficha rápida. Dados
                       completos podem ser adicionados depois.
                     </p>
                   </div>
-
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -447,8 +402,19 @@ export default function RecepcaoDashboard() {
                         <option value="Bradesco">Bradesco</option>
                       </select>
                     </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Email (Para notificações)
+                      </label>
+                      <input
+                        type="email"
+                        name="email"
+                        value={novoPaciente.email}
+                        onChange={handleInputChange}
+                        className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
                   </div>
-
                   <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
                     <button
                       onClick={() => setModoCadastro(false)}
@@ -465,18 +431,16 @@ export default function RecepcaoDashboard() {
                         "Salvando..."
                       ) : (
                         <>
-                          <Save size={18} /> Salvar Cadastro
+                          <Save size={18} />
+                          Salvar Cadastro
                         </>
                       )}
                     </button>
                   </div>
                 </div>
               )}
-
-              {/* ESTADO 3: CONFIRMAÇÃO DO ATENDIMENTO */}
               {pacienteSelecionado && !modoCadastro && (
                 <div className="space-y-6">
-                  {/* Card do Paciente */}
                   <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 flex justify-between items-center">
                     <div>
                       <h4 className="font-bold text-lg text-gray-900">
@@ -493,7 +457,6 @@ export default function RecepcaoDashboard() {
                       Trocar Paciente
                     </button>
                   </div>
-
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -508,7 +471,7 @@ export default function RecepcaoDashboard() {
                         <option value="PREFERENCIAL">
                           Preferencial (Idoso/Gestante)
                         </option>
-                        <option value="EMERGENCIA">Emergência</option>
+                        <option value="ALTA_PRIORIDADE">Emergência</option>
                       </select>
                     </div>
                     <div>
@@ -535,7 +498,6 @@ export default function RecepcaoDashboard() {
                       </div>
                     </div>
                   </div>
-
                   <div className="pt-6">
                     <button
                       onClick={confirmarAtendimento}
@@ -546,12 +508,13 @@ export default function RecepcaoDashboard() {
                         "Processando..."
                       ) : (
                         <>
-                          <CheckCircle size={24} /> Confirmar Chegada
+                          <CheckCircle size={24} />
+                          Confirmar Chegada
                         </>
                       )}
                     </button>
                     <p className="text-center text-xs text-gray-400 mt-3">
-                      Ao confirmar, uma senha será gerada e o médico notificado.
+                      Ao confirmar, uma senha será gerada para o painel.
                     </p>
                   </div>
                 </div>
