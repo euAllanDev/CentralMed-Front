@@ -18,6 +18,7 @@ import {
   FileUp,
   FileText,
   ChevronRight,
+  Sheet,
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -49,6 +50,13 @@ export default function Sidebar() {
       href: "/triagem",
       icon: Activity,
       roles: ["ADMIN", "ENFERMAGEM"],
+    },
+    {
+      name: "Tabela de Preços",
+      href: "/admin/precos",
+      icon: Sheet, // ou outro de sua preferência
+      roles: ["ADMIN"],
+      group: "faturamento",
     },
     {
       name: "Consultório",
