@@ -190,6 +190,8 @@ export default function MedicoPage() {
     }
   }
 
+  // Na sua página /medico/page.js
+
   async function handleChamar(agendamento, isFilaGeral) {
     if (chamandoId) return;
     setChamandoId(agendamento.id);
@@ -197,7 +199,7 @@ export default function MedicoPage() {
     try {
       let agendamentoParaAtender = agendamento;
 
-      // Lógica de "Roubar" da fila geral
+      // Se for da fila geral, primeiro o médico "assume" o paciente
       if (isFilaGeral) {
         if (
           !confirm(
@@ -213,44 +215,50 @@ export default function MedicoPage() {
         agendamentoParaAtender = res.data;
       }
 
-      // Monta o nome do local (Ex: Consultório Dr. Fulano)
-      const nomeMedico = agendamentoParaAtender.medico?.nome || "Médico";
-      const local = `Consultório ${nomeMedico}`;
+      // --- CORREÇÃO IMPORTANTE AQUI ---
+      // Chama o endpoint correto do MedicoController para acionar o painel
+      await api.post(`/medico/chamar/${agendamentoParaAtender.id}`);
+      // ---------------------------------
 
-      // Chama no Painel
-      await api.post(
-        `/recepcao/painel/chamar/${agendamentoParaAtender.id}?local=${local}`,
-      );
-
-      // Inicia o fluxo de tela
+      // Inicia o atendimento na tela (abre o prontuário, etc.)
       await iniciarAtendimento(agendamentoParaAtender);
 
-      // Atualiza filas visualmente na hora (sem esperar o polling de 10s)
+      // Remove da lista visual correta
       if (isFilaGeral) {
         setFilaGeral((prev) => prev.filter((p) => p.id !== agendamento.id));
       } else {
         setMinhaFila((prev) => prev.filter((p) => p.id !== agendamento.id));
       }
     } catch (err) {
-      alert("Erro ao iniciar atendimento.");
-      carregarFilas(); // Recarrega para garantir consistência
+      alert(
+        "Erro ao iniciar atendimento. O paciente pode já ter sido chamado.",
+      );
+      carregarFilas();
     } finally {
       setChamandoId(null);
     }
   }
 
+  // Na página /medico/page.js
+
   async function finalizarConsulta(e) {
     e.preventDefault();
-    if (!consultaAtual) return;
+    if (!consultaAtual) {
+      alert("Nenhuma consulta está ativa para ser finalizada.");
+      return;
+    }
 
     try {
+      // 1. Faz a chamada para a API. A API deve retornar status 200 OK.
       await api.post(
         `/medico/consulta/${consultaAtual.id}/finalizar`,
         formulario,
       );
 
+      // 2. Se a chamada deu certo (não caiu no 'catch'), mostra sucesso.
       alert("Consulta finalizada com sucesso!");
 
+      // 3. Limpa todos os estados para a tela voltar ao estado inicial "Aguardando..."
       setPacienteEmAtendimento(null);
       setDadosTriagem(null);
       setConsultaAtual(null);
@@ -258,10 +266,13 @@ export default function MedicoPage() {
       setFormulario({ anamnese: "", diagnosticoCid10: "", prescricao: "" });
       setArquivo(null);
 
+      // 4. Recarrega as filas para o médico ver o próximo paciente
       carregarFilas();
     } catch (error) {
-      console.error("Erro ao finalizar:", error);
-      alert("Erro ao finalizar consulta.");
+      console.error("Erro ao finalizar a consulta:", error);
+      alert(
+        "Falha ao finalizar consulta. Verifique os dados e tente novamente.",
+      );
     }
   }
 
@@ -352,9 +363,9 @@ export default function MedicoPage() {
                 <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
                   {pacienteEmAtendimento.paciente.nome}
                 </h1>
-                <p className="text-sm text-gray-500 font-medium mt-1">
-                  Convênio:{" "}
-                  {pacienteEmAtendimento.paciente.convenio || "Particular"}
+                <p className="text-sm text-gray-500">
+                  {pacienteEmAtendimento.paciente.convenio?.nome ||
+                    "Particular"}
                 </p>
               </div>
 

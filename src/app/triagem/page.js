@@ -266,8 +266,11 @@ export default function TriagemPage() {
                         </span>
                         <span className="w-px h-4 bg-gray-300"></span>
                         <span className="flex items-center gap-1">
-                          <span className="font-semibold">Convênio:</span>{" "}
-                          {pacienteSelecionado.paciente.convenio}
+                          <span className="flex items-center gap-1">
+                            <span className="font-semibold">Convênio:</span>{" "}
+                            {pacienteSelecionado.paciente.convenio?.nome ||
+                              "Particular"}
+                          </span>
                         </span>
                         <span className="w-px h-4 bg-gray-300"></span>
                         <span className="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded font-medium">
