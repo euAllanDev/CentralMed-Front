@@ -19,7 +19,8 @@ import {
   FileText,
   ChevronRight,
   Sheet,
-  Truck 
+  Truck,
+  ShoppingCart
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -106,6 +107,13 @@ export default function Sidebar() {
       icon: FileText,
       roles: ["ADMIN"],
       group: "faturamento",
+    },
+    { 
+      name: "Ordens de Compra", 
+      href: "/admin/compras", 
+      icon: ShoppingCart, // Ou outro que preferir
+      roles: ["ADMIN"],
+      group: "operacional"
     },
   ];
 
