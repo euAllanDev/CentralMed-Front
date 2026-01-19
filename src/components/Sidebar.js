@@ -19,6 +19,7 @@ import {
   FileText,
   ChevronRight,
   Sheet,
+  Truck 
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -91,6 +92,13 @@ export default function Sidebar() {
       icon: FileUp,
       roles: ["ADMIN"],
       group: "faturamento",
+    },
+    { 
+      name: "Fornecedores", 
+      href: "/admin/fornecedores", 
+      icon: Truck, // Exemplo
+      roles: ["ADMIN"],
+      group: "operacional" // Fica junto com Estoque
     },
     {
       name: "Emitir Notas (NFS-e)",
