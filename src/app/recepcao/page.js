@@ -23,7 +23,8 @@ export default function RecepcaoDashboard() {
   const [modalAberto, setModalAberto] = useState(false);
   const [todosPacientes, setTodosPacientes] = useState([]);
   const [listaMedicos, setListaMedicos] = useState([]);
-  const [listaConvenios, setListaConvenios] = useState([]); // <-- LINHA FALTANDO
+  const [listaConvenios, setListaConvenios] = useState([]);
+
   // Loading inicial
   const [loadingDados, setLoadingDados] = useState(true);
   // Loading de botões (salvar/confirmar)
@@ -43,8 +44,17 @@ export default function RecepcaoDashboard() {
   };
   const [novoPaciente, setNovoPaciente] = useState(initialFormState);
 
+  // Estados para Atendimento Imediato
   const [prioridade, setPrioridade] = useState("NORMAL");
   const [medicoSelecionado, setMedicoSelecionado] = useState("");
+
+  // --- NOVOS ESTADOS (Agendamento Futuro vs Imediato) ---
+  const [tipoAgendamento, setTipoAgendamento] = useState("IMEDIATO"); // 'IMEDIATO' ou 'FUTURO'
+  const [agendamentoFuturo, setAgendamentoFuturo] = useState({
+    data: "",
+    hora: "",
+  });
+
   const [dataAtual, setDataAtual] = useState("");
 
   useEffect(() => {
@@ -71,7 +81,6 @@ export default function RecepcaoDashboard() {
   async function carregarDadosIniciais() {
     setLoadingDados(true);
     try {
-      // Exemplo de chamadas (ajuste conforme seu backend real)
       const [resPacientes, resMedicos, resConvenios] = await Promise.all([
         api.get("/recepcao/pacientes"),
         api.get("/admin/profissionais/medicos"),
@@ -132,23 +141,18 @@ export default function RecepcaoDashboard() {
         payload,
       );
 
-      // --- CORREÇÃO DE LÓGICA AQUI ---
-      // 1. Pega o agendamento que voltou da API
       const agendamentoCriado = response.data;
-
-      // 2. "Hidrata" ele com o objeto Paciente COMPLETO que já temos no estado 'pacienteSelecionado'
       const agendamentoParaEmail = {
         ...agendamentoCriado,
         paciente: pacienteSelecionado,
       };
 
-      // 3. Envia o objeto completo para o serviço de email
       EmailService.sendReminder(agendamentoParaEmail)
         .then(() => console.log("Email de notificação disparado."))
         .catch((err) => console.error("Falha ao enviar email:", err));
-      // ---------------------------------
 
-      // O resto da sua lógica de alert e fechar modal continua a mesma...
+      alert("Check-in realizado com sucesso!");
+      fecharModal();
     } catch (error) {
       console.error("Erro ao iniciar atendimento:", error);
       alert("Erro ao confirmar atendimento.");
@@ -157,9 +161,75 @@ export default function RecepcaoDashboard() {
     }
   }
 
+  // --- NOVA FUNÇÃO: Agendar Futuro ---
+  // Dentro de src/app/recepcao/page.js
+
+  // Substitua a função confirmarAgendamentoFuturo inteira por esta:
+
+  async function confirmarAgendamentoFuturo() {
+    // 1. Validação
+    if (
+      !pacienteSelecionado ||
+      !agendamentoFuturo.data ||
+      !agendamentoFuturo.hora
+    ) {
+      return alert(
+        "Por favor, preencha todos os campos do agendamento (Data e Hora).",
+      );
+    }
+
+    setLoadingAction(true);
+    try {
+      console.log("Paciente selecionado:", pacienteSelecionado); // ADICIONE ISSO
+      console.log("Medico selecionado:", medicoSelecionado); // ADICIONE ISSO
+      console.log("Agendamento futuro:", agendamentoFuturo); // ADICIONE ISSO
+
+      const payload = {
+        data: agendamentoFuturo.data,
+        hora: agendamentoFuturo.hora,
+        pacienteId: pacienteSelecionado.id,
+        medicoId: medicoSelecionado ? Number(medicoSelecionado) : null,
+      };
+
+      console.log("Enviando payload:", payload);
+
+      // 3. Chamada à API
+      const response = await api.post("/recepcao/agendamentos", payload);
+
+      // 4. Formatação segura da data para o Alerta (evita erro de fuso horário)
+      const [ano, mes, dia] = agendamentoFuturo.data.split("-");
+      const dataFormatada = `${dia}/${mes}/${ano}`;
+
+      alert(
+        `Agendamento para ${pacienteSelecionado.nome} confirmado para o dia ${dataFormatada}.`,
+      );
+
+      // 5. Envio de Email (Opcional)
+      const agendamentoCriado = response.data;
+      if (agendamentoCriado) {
+        EmailService.sendReminder({
+          ...agendamentoCriado,
+          // Garante que o objeto paciente completo vá para o template de email
+          paciente: pacienteSelecionado,
+        });
+      }
+
+      fecharModal();
+    } catch (error) {
+      console.error("Erro agendamento futuro:", error);
+      // Tenta mostrar a mensagem de erro do backend, se houver
+      const msgErro =
+        error.response?.data?.message ||
+        "Erro ao criar agendamento. Verifique o console.";
+      alert(msgErro);
+    } finally {
+      setLoadingAction(false);
+    }
+  }
+
   function fecharModal() {
     setModalAberto(false);
-    // Timeout para limpar o estado apenas após a animação fechar (opcional)
+    // Timeout para limpar o estado apenas após a animação fechar
     setTimeout(() => {
       setPacienteSelecionado(null);
       setModoCadastro(false);
@@ -167,6 +237,10 @@ export default function RecepcaoDashboard() {
       setPrioridade("NORMAL");
       setMedicoSelecionado("");
       setNovoPaciente(initialFormState);
+
+      // Resetar estados novos
+      setTipoAgendamento("IMEDIATO");
+      setAgendamentoFuturo({ data: "", hora: "" });
     }, 200);
   }
 
@@ -239,8 +313,10 @@ export default function RecepcaoDashboard() {
                   </>
                 ) : pacienteSelecionado ? (
                   <>
-                    <CheckCircle className="w-5 h-5 text-green-600" /> Confirmar
-                    Chegada
+                    <CheckCircle className="w-5 h-5 text-green-600" />
+                    {tipoAgendamento === "IMEDIATO"
+                      ? "Confirmar Chegada"
+                      : "Agendar Paciente"}
                   </>
                 ) : (
                   <>
@@ -409,9 +485,10 @@ export default function RecepcaoDashboard() {
                 </div>
               )}
 
-              {/* CENÁRIO 3: CONFIRMAÇÃO */}
+              {/* CENÁRIO 3: CONFIRMAÇÃO (Com Abas) */}
               {pacienteSelecionado && !modoCadastro && (
                 <div className="space-y-6">
+                  {/* Card do Paciente */}
                   <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex justify-between items-center">
                     <div>
                       <h4 className="font-bold text-blue-900 text-lg">
@@ -429,59 +506,172 @@ export default function RecepcaoDashboard() {
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Prioridade
-                      </label>
-                      <select
-                        value={prioridade}
-                        onChange={(e) => setPrioridade(e.target.value)}
-                        className="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                  {/* ABAS de Navegação */}
+                  <div className="border-b">
+                    <nav className="-mb-px flex space-x-6">
+                      <button
+                        onClick={() => setTipoAgendamento("IMEDIATO")}
+                        className={`py-2 px-1 border-b-2 font-medium transition-colors ${
+                          tipoAgendamento === "IMEDIATO"
+                            ? "border-blue-500 text-blue-600"
+                            : "border-transparent text-gray-500 hover:text-gray-700"
+                        }`}
                       >
-                        <option value="NORMAL">Normal</option>
-                        <option value="PREFERENCIAL">
-                          Preferencial (Idoso/Gestante)
-                        </option>
-                        <option value="EMERGENCIA">Emergência</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Médico (Opcional)
-                      </label>
-                      <select
-                        value={medicoSelecionado}
-                        onChange={(e) => setMedicoSelecionado(e.target.value)}
-                        className="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                        Atendimento Hoje
+                      </button>
+                      <button
+                        onClick={() => setTipoAgendamento("FUTURO")}
+                        className={`py-2 px-1 border-b-2 font-medium transition-colors ${
+                          tipoAgendamento === "FUTURO"
+                            ? "border-blue-500 text-blue-600"
+                            : "border-transparent text-gray-500 hover:text-gray-700"
+                        }`}
                       >
-                        <option value="">
-                          Qualquer disponível (Fila Geral)
-                        </option>
-                        {listaMedicos.map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.nome}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                        Agendar Futuro
+                      </button>
+                    </nav>
                   </div>
 
-                  <div className="pt-4 border-t flex justify-end gap-3">
-                    <button
-                      onClick={() => setPacienteSelecionado(null)}
-                      className="px-4 py-3 text-gray-600 hover:bg-gray-100 rounded-lg font-medium"
-                    >
-                      Voltar
-                    </button>
-                    <button
-                      onClick={confirmarAtendimento}
-                      disabled={loadingAction}
-                      className="flex-1 md:flex-none px-8 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold shadow-lg shadow-green-200 transition-all transform hover:-translate-y-0.5 disabled:opacity-50"
-                    >
-                      {loadingAction ? "Processando..." : "Confirmar Check-in"}
-                    </button>
-                  </div>
+                  {/* --- ABA 1: Atendimento Imediato --- */}
+                  {tipoAgendamento === "IMEDIATO" && (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Prioridade
+                          </label>
+                          <select
+                            value={prioridade}
+                            onChange={(e) => setPrioridade(e.target.value)}
+                            className="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                          >
+                            <option value="NORMAL">Normal</option>
+                            <option value="PREFERENCIAL">
+                              Preferencial (Idoso/Gestante)
+                            </option>
+                            <option value="EMERGENCIA">Emergência</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Médico (Opcional)
+                          </label>
+                          <select
+                            value={medicoSelecionado}
+                            onChange={(e) =>
+                              setMedicoSelecionado(e.target.value)
+                            }
+                            className="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                          >
+                            <option value="">
+                              Qualquer disponível (Fila Geral)
+                            </option>
+                            {listaMedicos.map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.nome}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="pt-4 border-t flex justify-end gap-3">
+                        <button
+                          onClick={() => setPacienteSelecionado(null)}
+                          className="px-4 py-3 text-gray-600 hover:bg-gray-100 rounded-lg font-medium"
+                        >
+                          Voltar
+                        </button>
+                        <button
+                          onClick={confirmarAtendimento}
+                          disabled={loadingAction}
+                          className="flex-1 md:flex-none px-8 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold shadow-lg shadow-green-200 transition-all transform hover:-translate-y-0.5 disabled:opacity-50"
+                        >
+                          {loadingAction
+                            ? "Processando..."
+                            : "Confirmar Check-in"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* --- ABA 2: Agendamento Futuro --- */}
+                  {tipoAgendamento === "FUTURO" && (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Data *
+                          </label>
+                          <input
+                            type="date"
+                            value={agendamentoFuturo.data}
+                            onChange={(e) =>
+                              setAgendamentoFuturo({
+                                ...agendamentoFuturo,
+                                data: e.target.value,
+                              })
+                            }
+                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Hora *
+                          </label>
+                          <input
+                            type="time"
+                            value={agendamentoFuturo.hora}
+                            onChange={(e) =>
+                              setAgendamentoFuturo({
+                                ...agendamentoFuturo,
+                                hora: e.target.value,
+                              })
+                            }
+                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Médico Responsável
+                        </label>
+                        <select
+                          value={medicoSelecionado}
+                          onChange={(e) => setMedicoSelecionado(e.target.value)}
+                          className="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                        >
+                          <option value="">
+                            Selecione um médico (Opcional)
+                          </option>
+                          {listaMedicos.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.nome}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="pt-4 border-t flex justify-end gap-3">
+                        <button
+                          onClick={() => setPacienteSelecionado(null)}
+                          className="px-4 py-3 text-gray-600 hover:bg-gray-100 rounded-lg font-medium"
+                        >
+                          Voltar
+                        </button>
+                        <button
+                          onClick={confirmarAgendamentoFuturo}
+                          disabled={loadingAction}
+                          className="flex-1 md:flex-none px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-lg shadow-blue-200 transition-all transform hover:-translate-y-0.5 disabled:opacity-50"
+                        >
+                          {loadingAction
+                            ? "Agendando..."
+                            : "Confirmar Agendamento"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
